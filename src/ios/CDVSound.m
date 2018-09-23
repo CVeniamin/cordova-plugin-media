@@ -28,6 +28,7 @@
 @implementation CDVSound
 
 BOOL keepAvAudioSessionAlwaysActive = NO;
+BOOL bShouldLoop = NO;
 
 @synthesize soundCache, avSession, currMediaId, statusCallbackId;
 
@@ -370,6 +371,11 @@ BOOL keepAvAudioSessionAlwaysActive = NO;
                     bPlayAudioWhenScreenIsLocked = [playAudioWhenScreenIsLocked boolValue];
                 }
 
+                NSNumber* shouldLoop = [options objectForKey:@"shouldLoop"];
+                if (shouldLoop != nil) {
+                    bShouldLoop = [shouldLoop boolValue];
+                }
+
                 NSString* sessionCategory = bPlayAudioWhenScreenIsLocked ? AVAudioSessionCategoryPlayback : AVAudioSessionCategorySoloAmbient;
                 [self.avSession setCategory:sessionCategory error:&err];
                 if (![self.avSession setActive:YES error:&err]) {
@@ -377,6 +383,11 @@ BOOL keepAvAudioSessionAlwaysActive = NO;
                     NSLog(@"Unable to play audio: %@", [err localizedFailureReason]);
                     bError = YES;
                 }
+            }
+            NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
+            NSInteger numberOfLoops = 1;
+            if (loopOption != nil) {
+                numberOfLoops = [loopOption intValue];
             }
             if (!bError) {
                 NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
@@ -388,7 +399,7 @@ BOOL keepAvAudioSessionAlwaysActive = NO;
                         NSLog(@"Duration is infifnite, setting it to -1");
                         duration = -1;
                     }
-
+                    avPlayer.numberOfLoops = numberOfLoops;
                     if (audioFile.rate != nil){
                         float customRate = [audioFile.rate floatValue];
                         NSLog(@"Playing stream with AVPlayer & custom rate");
@@ -397,14 +408,7 @@ BOOL keepAvAudioSessionAlwaysActive = NO;
                         NSLog(@"Playing stream with AVPlayer & default rate");
                         [avPlayer play];
                     }
-
                 } else {
-
-                    NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
-                    NSInteger numberOfLoops = 0;
-                    if (loopOption != nil) {
-                        numberOfLoops = [loopOption intValue] - 1;
-                    }
                     audioFile.player.numberOfLoops = numberOfLoops;
                     if (audioFile.player.isPlaying) {
                         [audioFile.player stop];
@@ -823,10 +827,13 @@ BOOL keepAvAudioSessionAlwaysActive = NO;
 -(void)itemDidFinishPlaying:(NSNotification *) notification {
     // Will be called when AVPlayer finishes playing playerItem
     NSString* mediaId = self.currMediaId;
-
-     if (! keepAvAudioSessionAlwaysActive && self.avSession && ! [self isPlayingOrRecording]) {
-         [self.avSession setActive:NO error:nil];
-     }
+    if (bShouldLoop){
+        AVPlayerItem *p = [notification object];
+        [p seekToTime:kCMTimeZero];
+    }
+    if (! keepAvAudioSessionAlwaysActive && self.avSession && ! [self isPlayingOrRecording]) {
+        [self.avSession setActive:NO error:nil];
+    }
     [self onStatus:MEDIA_STATE mediaId:mediaId param:@(MEDIA_STOPPED)];
 }
 
