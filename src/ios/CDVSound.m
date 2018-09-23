@@ -262,9 +262,12 @@ BOOL bShouldLoop = NO;
 
             // Subscribe to the AVPlayerItem's PlaybackStalledNotification notification.
             [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemStalledPlaying:) name:AVPlayerItemPlaybackStalledNotification object:playerItem];
+            
 
             // Pass the AVPlayerItem to a new player
             avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
+
+            avPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
 
             // Avoid excessive buffering so streaming media can play instantly on iOS
             // Removes preplay delay on ios 10+, makes consistent with ios9 behaviour
@@ -828,8 +831,12 @@ BOOL bShouldLoop = NO;
     // Will be called when AVPlayer finishes playing playerItem
     NSString* mediaId = self.currMediaId;
     if (bShouldLoop){
-        AVPlayerItem *p = [notification object];
-        [p seekToTime:kCMTimeZero];
+        [avPlayer seekToTime: kCMTimeZero
+            toleranceBefore: kCMTimeZero
+            toleranceAfter: kCMTimeZero
+        completionHandler: ^(BOOL finished){
+            if (finished) [avPlayer play];
+        }];
     }
     if (! keepAvAudioSessionAlwaysActive && self.avSession && ! [self isPlayingOrRecording]) {
         [self.avSession setActive:NO error:nil];
