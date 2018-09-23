@@ -384,11 +384,7 @@ BOOL bShouldLoop = NO;
                     bError = YES;
                 }
             }
-            NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
-            NSInteger numberOfLoops = 1;
-            if (loopOption != nil) {
-                numberOfLoops = [loopOption intValue];
-            }
+            
             if (!bError) {
                 NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
                 double duration = 0;
@@ -399,7 +395,6 @@ BOOL bShouldLoop = NO;
                         NSLog(@"Duration is infifnite, setting it to -1");
                         duration = -1;
                     }
-                    avPlayer.numberOfLoops = numberOfLoops;
                     if (audioFile.rate != nil){
                         float customRate = [audioFile.rate floatValue];
                         NSLog(@"Playing stream with AVPlayer & custom rate");
@@ -409,6 +404,11 @@ BOOL bShouldLoop = NO;
                         [avPlayer play];
                     }
                 } else {
+                    NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
+                    NSInteger numberOfLoops = 1;
+                    if (loopOption != nil) {
+                        numberOfLoops = [loopOption intValue];
+                    }
                     audioFile.player.numberOfLoops = numberOfLoops;
                     if (audioFile.player.isPlaying) {
                         [audioFile.player stop];
