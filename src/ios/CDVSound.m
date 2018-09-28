@@ -854,7 +854,7 @@ BOOL bShouldLoop = NO;
         BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
 
         if(isReadyToSeek) {
-            [avPlayer seekToTime: timeToSeek
+            [avPlayer seekToTime: kCMTimeZero
                  toleranceBefore: kCMTimeZero
                   toleranceAfter: kCMTimeZero
                completionHandler: ^(BOOL finished) {
