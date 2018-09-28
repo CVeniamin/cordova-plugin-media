@@ -160,6 +160,17 @@ Media.prototype.release = function() {
 };
 
 /**
+ * Sets if the sound should loop.
+ */
+Media.prototype.setShouldLoop = function(loop) {
+    if (cordova.platformId === 'ios'){
+        if (loop != null && loop != undefined) {
+            exec(null, null, "Media", "setShouldLoop", [loop]);
+        }
+    }
+};
+
+/**
  * Adjust the volume.
  */
 Media.prototype.setVolume = function(volume) {

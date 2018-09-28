@@ -263,11 +263,8 @@ BOOL bShouldLoop = NO;
             // Subscribe to the AVPlayerItem's PlaybackStalledNotification notification.
             [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemStalledPlaying:) name:AVPlayerItemPlaybackStalledNotification object:playerItem];
             
-
             // Pass the AVPlayerItem to a new player
             avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
-
-            avPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
 
             // Avoid excessive buffering so streaming media can play instantly on iOS
             // Removes preplay delay on ios 10+, makes consistent with ios9 behaviour
@@ -342,6 +339,22 @@ BOOL bShouldLoop = NO;
     // don't care for any callbacks
 }
 
+- (void)setShouldLoop:(CDVInvokedUrlCommand*)command
+{
+    id shouldLoop = [command argumentAtIndex:0];
+    if (shouldLoop != nil || ([shouldLoop isKindOfClass:[NSString class]] && [shouldLoop isEqualToString:@"true"]) || [shouldLoop boolValue])
+    {
+        if(avPlayer != nil && avPlayer.currentItem){
+            avPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+        }
+        bShouldLoop = YES;
+        return;
+    } else {
+        bShouldLoop = NO;
+        return;
+    }
+}
+
 - (void)startPlayingAudio:(CDVInvokedUrlCommand*)command
 {
     [self.commandDelegate runInBackground:^{
@@ -372,11 +385,6 @@ BOOL bShouldLoop = NO;
                 BOOL bPlayAudioWhenScreenIsLocked = YES;
                 if (playAudioWhenScreenIsLocked != nil) {
                     bPlayAudioWhenScreenIsLocked = [playAudioWhenScreenIsLocked boolValue];
-                }
-
-                NSNumber* shouldLoop = [options objectForKey:@"shouldLoop"];
-                if (shouldLoop != nil) {
-                    bShouldLoop = [shouldLoop boolValue];
                 }
 
                 NSString* sessionCategory = bPlayAudioWhenScreenIsLocked ? AVAudioSessionCategoryPlayback : AVAudioSessionCategorySoloAmbient;
