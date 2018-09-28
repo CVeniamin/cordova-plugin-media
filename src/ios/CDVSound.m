@@ -848,19 +848,25 @@ BOOL bShouldLoop = NO;
 
 -(void)itemDidFinishPlaying:(NSNotification *) notification {
     // Will be called when AVPlayer finishes playing playerItem
-    NSString* mediaId = self.currMediaId;
     
     if (bShouldLoop){
-        AVPlayerItem *p = [notification object];
-        [p seekToTime:kCMTimeZero];
-        [p play];
-        /* [avPlayer seekToTime: kCMTimeZero
-            toleranceBefore: kCMTimeZero
-            toleranceAfter: kCMTimeZero
-        completionHandler: ^(BOOL finished){
-           // if (finished) [avPlayer play];
-        }]; */
+        BOOL isPlaying = (avPlayer.rate > 0 && !avPlayer.error);
+        BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
+
+        if(isReadyToSeek) {
+            [avPlayer seekToTime: timeToSeek
+                 toleranceBefore: kCMTimeZero
+                  toleranceAfter: kCMTimeZero
+               completionHandler: ^(BOOL finished) {
+                    if (isPlaying){
+                        [avPlayer play];
+                    }
+               }];
+        }
     }
+
+    NSString* mediaId = self.currMediaId;
+
     if (! keepAvAudioSessionAlwaysActive && self.avSession && ! [self isPlayingOrRecording]) {
         [self.avSession setActive:NO error:nil];
     }
