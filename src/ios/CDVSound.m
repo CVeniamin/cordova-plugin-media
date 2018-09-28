@@ -853,6 +853,7 @@ BOOL bShouldLoop = NO;
     if (bShouldLoop){
         AVPlayerItem *p = [notification object];
         [p seekToTime:kCMTimeZero];
+        [p play];
         /* [avPlayer seekToTime: kCMTimeZero
             toleranceBefore: kCMTimeZero
             toleranceAfter: kCMTimeZero
