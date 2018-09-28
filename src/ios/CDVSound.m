@@ -902,7 +902,6 @@ BOOL bShouldLoop = NO;
 {
     [[self soundCache] removeAllObjects];
     [[NSNotificationCenter defaultCenter] removeObserver:self];
-    [super dealloc];
 }
 
 - (void)onReset
