@@ -256,15 +256,26 @@ BOOL bShouldLoop = NO;
         if (![resourceUrl isFileURL] && ![resourcePath hasPrefix:CDVFILE_PREFIX]) {
             // First create an AVPlayerItem
             AVPlayerItem* playerItem = [AVPlayerItem playerItemWithURL:resourceUrl];
-
-            // Subscribe to the AVPlayerItem's DidPlayToEndTime notification.
-            [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemDidFinishPlaying:) name:AVPlayerItemDidPlayToEndTimeNotification object:playerItem];
-
-            // Subscribe to the AVPlayerItem's PlaybackStalledNotification notification.
-            [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemStalledPlaying:) name:AVPlayerItemPlaybackStalledNotification object:playerItem];
             
             // Pass the AVPlayerItem to a new player
             avPlayer = [[AVPlayer alloc] initWithPlayerItem:playerItem];
+
+            avPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+
+            // Subscribe to the AVPlayerItem's DidPlayToEndTime notification.
+            /*[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemDidFinishPlaying:) name:AVPlayerItemDidPlayToEndTimeNotification object:playerItem];
+            */
+
+            [[NSNotificationCenter defaultCenter] addObserver:self
+                selector:@selector(itemDidFinishPlaying:)
+                name:AVPlayerItemDidPlayToEndTimeNotification
+                object:[avPlayer currentItem]];
+
+            // Subscribe to the AVPlayerItem's PlaybackStalledNotification notification.
+            [[NSNotificationCenter defaultCenter] addObserver:self 
+                selector:@selector(itemStalledPlaying:) 
+                name:AVPlayerItemPlaybackStalledNotification 
+                object:[avPlayer currentItem]];
 
             // Avoid excessive buffering so streaming media can play instantly on iOS
             // Removes preplay delay on ios 10+, makes consistent with ios9 behaviour
@@ -344,9 +355,9 @@ BOOL bShouldLoop = NO;
     id shouldLoop = [command argumentAtIndex:0];
     if (shouldLoop != nil || ([shouldLoop isKindOfClass:[NSString class]] && [shouldLoop isEqualToString:@"true"]) || [shouldLoop boolValue])
     {
-        if(avPlayer != nil && avPlayer.currentItem){
+        /* if(avPlayer != nil && avPlayer.currentItem){
             avPlayer.actionAtItemEnd = AVPlayerActionAtItemEndNone;
-        }
+        } */
         bShouldLoop = YES;
         return;
     } else {
@@ -838,13 +849,16 @@ BOOL bShouldLoop = NO;
 -(void)itemDidFinishPlaying:(NSNotification *) notification {
     // Will be called when AVPlayer finishes playing playerItem
     NSString* mediaId = self.currMediaId;
+    
     if (bShouldLoop){
-        [avPlayer seekToTime: kCMTimeZero
+        AVPlayerItem *p = [notification object];
+        [p seekToTime:kCMTimeZero];
+        /* [avPlayer seekToTime: kCMTimeZero
             toleranceBefore: kCMTimeZero
             toleranceAfter: kCMTimeZero
         completionHandler: ^(BOOL finished){
-            if (finished) [avPlayer play];
-        }];
+           // if (finished) [avPlayer play];
+        }]; */
     }
     if (! keepAvAudioSessionAlwaysActive && self.avSession && ! [self isPlayingOrRecording]) {
         [self.avSession setActive:NO error:nil];
@@ -887,6 +901,8 @@ BOOL bShouldLoop = NO;
 - (void)dealloc
 {
     [[self soundCache] removeAllObjects];
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [super dealloc];
 }
 
 - (void)onReset
