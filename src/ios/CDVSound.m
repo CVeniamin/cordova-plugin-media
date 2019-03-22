@@ -245,6 +245,8 @@ BOOL bShouldLoop = NO;
     NSString* resourcePath = [command argumentAtIndex:1];
 
     CDVAudioFile* audioFile = [self audioFileForResource:resourcePath withId:mediaId doValidation:YES forRecording:NO suppressValidationErrors:YES];
+	
+	bShouldLoop = NO; // reset flag whenever a new Media is created
 
     if (audioFile == nil) {
         NSString* errorMessage = [NSString stringWithFormat:@"Failed to initialize Media file with path %@", resourcePath];
@@ -387,7 +389,7 @@ BOOL bShouldLoop = NO;
         if (!bError) {
             //self.currMediaId = audioFile.player.mediaId;
             self.currMediaId = mediaId;
-
+			
             // audioFile.player != nil  or player was successfully created
             // get the audioSession and set the category to allow Playing when device is locked or ring/silent switch engaged
             if ([self hasAudioSession]) {
@@ -410,13 +412,34 @@ BOOL bShouldLoop = NO;
             if (!bError) {
                 NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
                 double duration = 0;
-                if (avPlayer.currentItem && avPlayer.currentItem.asset) {
+				
+				NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
+				NSInteger numberOfLoops = 1;
+				if (loopOption != nil) {
+					numberOfLoops = [loopOption intValue];
+				}
+
+				BOOL isLocalFile = [audioFile.resourceURL isFileURL] || [resourcePath hasPrefix:CDVFILE_PREFIX] || [resourcePath hasPrefix:DOCUMENTS_SCHEME_PREFIX];
+
+				//avoid play a file:// or a cdvfile:// with the incorrect player (if before we played a remote sound)
+                //it can happen when we alternate between local & remote URLS.
+                //as a consequence we don´t hear the sounds.  
+                if (avPlayer.currentItem && avPlayer.currentItem.asset && !isLocalFile) {
+					
+					// infinite looping for AVPlayer
+					if (numberOfLoops == -1) {
+						bShouldLoop = YES;
+					} else {
+						bShouldLoop = NO;
+					}
+
                     CMTime time = avPlayer.currentItem.asset.duration;
                     duration = CMTimeGetSeconds(time);
                     if (isnan(duration)) {
-                        NSLog(@"Duration is infifnite, setting it to -1");
+                        NSLog(@"Duration is infinite, setting it to -1");
                         duration = -1;
                     }
+
                     if (audioFile.rate != nil){
                         float customRate = [audioFile.rate floatValue];
                         NSLog(@"Playing stream with AVPlayer & custom rate");
@@ -425,12 +448,8 @@ BOOL bShouldLoop = NO;
                         NSLog(@"Playing stream with AVPlayer & default rate");
                         [avPlayer play];
                     }
+					
                 } else {
-                    NSNumber* loopOption = [options objectForKey:@"numberOfLoops"];
-                    NSInteger numberOfLoops = 1;
-                    if (loopOption != nil) {
-                        numberOfLoops = [loopOption intValue];
-                    }
                     audioFile.player.numberOfLoops = numberOfLoops;
                     if (audioFile.player.isPlaying) {
                         [audioFile.player stop];
@@ -454,18 +473,6 @@ BOOL bShouldLoop = NO;
             }
         }
         if (bError) {
-            /*  I don't see a problem playing previously recorded audio so removing this section - BG
-            NSError* error;
-            // try loading it one more time, in case the file was recorded previously
-            audioFile.player = [[ AVAudioPlayer alloc ] initWithContentsOfURL:audioFile.resourceURL error:&error];
-            if (error != nil) {
-                NSLog(@"Failed to initialize AVAudioPlayer: %@\n", error);
-                audioFile.player = nil;
-            } else {
-                NSLog(@"Playing audio sample '%@'", audioFile.resourcePath);
-                audioFile.player.numberOfLoops = numberOfLoops;
-                [audioFile.player play];
-            } */
             // error creating the session or player
             [self onStatus:MEDIA_ERROR mediaId:mediaId
               param:[self createMediaErrorWithCode:MEDIA_ERR_NONE_SUPPORTED message:nil]];
@@ -484,32 +491,12 @@ BOOL bShouldLoop = NO;
 
     // create the player
     NSURL* resourceURL = audioFile.resourceURL;
+	
+	//check if the file is local or over network
+    BOOL isLocalFile = [resourceURL isFileURL] || [resourceURL.absoluteString hasPrefix:CDVFILE_PREFIX] || [resourceURL.absoluteString hasPrefix:DOCUMENTS_SCHEME_PREFIX];
 
     if ([resourceURL isFileURL]) {
         audioFile.player = [[CDVAudioPlayer alloc] initWithContentsOfURL:resourceURL error:&playerError];
-    } else {
-        /*
-        NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:resourceURL];
-        NSString* userAgent = [self.commandDelegate userAgent];
-        if (userAgent) {
-            [request setValue:userAgent forHTTPHeaderField:@"User-Agent"];
-        }
-        NSURLResponse* __autoreleasing response = nil;
-        NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&playerError];
-        if (playerError) {
-            NSLog(@"Unable to download audio from: %@", [resourceURL absoluteString]);
-        } else {
-            // bug in AVAudioPlayer when playing downloaded data in NSData - we have to download the file and play from disk
-            CFUUIDRef uuidRef = CFUUIDCreate(kCFAllocatorDefault);
-            CFStringRef uuidString = CFUUIDCreateString(kCFAllocatorDefault, uuidRef);
-            NSString* filePath = [NSString stringWithFormat:@"%@/%@", [NSTemporaryDirectory()stringByStandardizingPath], uuidString];
-            CFRelease(uuidString);
-            CFRelease(uuidRef);
-            [data writeToFile:filePath atomically:YES];
-            NSURL* fileURL = [NSURL fileURLWithPath:filePath];
-            audioFile.player = [[CDVAudioPlayer alloc] initWithContentsOfURL:fileURL error:&playerError];
-        }
-        */
     }
 
     if (playerError != nil) {
@@ -520,10 +507,19 @@ BOOL bShouldLoop = NO;
         }
         bError = YES;
     } else {
-        audioFile.player.mediaId = mediaId;
-        audioFile.player.delegate = self;
-        if (avPlayer == nil)
-            bError = ![audioFile.player prepareToPlay];
+
+		if (audioFile.player != nil) { // check for nil in case prepareToPlay was called two times in succession
+			audioFile.player.mediaId = mediaId;
+			audioFile.player.delegate = self;
+
+			bError = ![audioFile.player prepareToPlay];	        //one should not be related with the other, what matters is the player that we are going to use & the resource location
+			//without this check if we previously played a remote sound we have a avPlayer instance with an currentItem, therefore the
+			//prepareToPlay above would not be called, and the current sound could end up on the wrong player
+
+			if(isLocalFile) {
+				bError = ![audioFile.player prepareToPlay];
+			}
+		}
     }
     return bError;
 }
@@ -602,8 +598,8 @@ BOOL bShouldLoop = NO;
         }
 
     } else if (avPlayer != nil) {
-        //int32_t timeScale = avPlayer.currentItem.asset.duration.timescale;
-        CMTime timeToSeek = CMTimeMakeWithSeconds(posInSeconds, 600);
+        int32_t timeScale = avPlayer.currentItem.asset.duration.timescale;
+        CMTime timeToSeek = CMTimeMakeWithSeconds(posInSeconds, timeScale);
 
         BOOL isPlaying = (avPlayer.rate > 0 && !avPlayer.error);
         BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
@@ -671,6 +667,10 @@ BOOL bShouldLoop = NO;
     if (avPlayer) {
        CMTime time = [avPlayer currentTime];
        position = CMTimeGetSeconds(time);
+    }
+
+    if(isnan(position)){
+        position = -1;
     }
 
     CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDouble:position];
@@ -850,19 +850,21 @@ BOOL bShouldLoop = NO;
     // Will be called when AVPlayer finishes playing playerItem
     
     if (bShouldLoop){
-        BOOL isPlaying = (avPlayer.rate > 0 && !avPlayer.error);
-        BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
+		if (avPlayer != nil) {
+			BOOL isPlaying = (avPlayer.rate > 0 && !avPlayer.error);
+			BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
 
-        if(isReadyToSeek) {
-            [avPlayer seekToTime: kCMTimeZero
-                 toleranceBefore: kCMTimeZero
-                  toleranceAfter: kCMTimeZero
-               completionHandler: ^(BOOL finished) {
-                    if (isPlaying){
-                        [avPlayer play];
-                    }
-               }];
-        }
+			if(isReadyToSeek) {
+				[avPlayer seekToTime: kCMTimeZero
+					toleranceBefore: kCMTimeZero
+					toleranceAfter: kCMTimeZero
+				completionHandler: ^(BOOL finished) {
+						if (isPlaying){
+							[avPlayer play];
+						}
+				}];
+			}
+		}
     }
 
     NSString* mediaId = self.currMediaId;
@@ -876,6 +878,10 @@ BOOL bShouldLoop = NO;
 -(void)itemStalledPlaying:(NSNotification *) notification {
     // Will be called when playback stalls due to buffer empty
     NSLog(@"Stalled playback");
+    NSString* errMsg = @"stalled_playback";
+    NSString* mediaId = self.currMediaId;
+    [self onStatus:MEDIA_ERROR mediaId:mediaId param:
+    [self createAbortError:errMsg]];
 }
 
 - (void)onMemoryWarning
