@@ -448,7 +448,17 @@ BOOL bShouldLoop = NO;
                         NSLog(@"Playing stream with AVPlayer & default rate");
                         [avPlayer play];
                     }
-					
+
+                    
+                    BOOL isReadyToSeek = (avPlayer.status == AVPlayerStatusReadyToPlay) && (avPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay);
+                    if (isReadyToSeek) {
+                        [self onStatus:MEDIA_DURATION mediaId:mediaId param:@(duration)];
+                        [self onStatus:MEDIA_STATE mediaId:mediaId param:@(MEDIA_RUNNING)];
+                    } else {
+                        [self onStatus:MEDIA_DURATION mediaId:mediaId param:@(duration)];
+                        [self onStatus:MEDIA_STATE mediaId:mediaId param:@(MEDIA_STARTING)];
+                    }
+
                 } else {
                     audioFile.player.numberOfLoops = numberOfLoops;
                     if (audioFile.player.isPlaying) {
@@ -466,10 +476,10 @@ BOOL bShouldLoop = NO;
 
                     [audioFile.player play];
                     duration = round(audioFile.player.duration * 1000) / 1000;
+                
+                    [self onStatus:MEDIA_DURATION mediaId:mediaId param:@(duration)];
+                    [self onStatus:MEDIA_STATE mediaId:mediaId param:@(MEDIA_RUNNING)];
                 }
-
-                [self onStatus:MEDIA_DURATION mediaId:mediaId param:@(duration)];
-                [self onStatus:MEDIA_STATE mediaId:mediaId param:@(MEDIA_RUNNING)];
             }
         }
         if (bError) {
